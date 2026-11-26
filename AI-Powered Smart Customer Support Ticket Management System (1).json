@@ -1,0 +1,680 @@
+{
+  "name": "AI-Powered Smart Customer Support Ticket Management System",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smart-support-ticket-system",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "48740678-bbfd-40fe-9517-05a313eaf869",
+      "name": "Receive Support Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        96
+      ],
+      "webhookId": "90c23ad1-f011-41d4-b770-6b8b9bbadc43"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body.customer_name }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            },
+            {
+              "leftValue": "={{ $json.body.customer_email }}",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              },
+              "rightValue": "@"
+            },
+            {
+              "leftValue": "={{ $json.body.issue_description }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "84d54e76-460a-48bf-9dfa-bb3009725390",
+      "name": "Is Request Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        224,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Builds the ticket: ID, category, priority and a template response (no AI credentials needed).\nconst b = $input.first().json.body || {};\nconst name = String(b.customer_name).trim();\nconst email = String(b.customer_email).trim();\nconst desc = String(b.issue_description).trim();\nconst text = desc.toLowerCase();\nconst has = (words) => words.some((w) => text.includes(w));\n\nconst categories = ['Payment Issues', 'Technical Issues', 'Account Issues', 'General Queries'];\nlet category = categories.find((c) => c.toLowerCase() === String(b.issue_category || '').trim().toLowerCase());\nif (!category) {\n  if (has(['payment', 'refund', 'charge', 'invoice', 'billing', 'transaction', 'deducted', 'card', 'upi'])) category = 'Payment Issues';\n  else if (has(['password', 'login', 'log in', 'account', 'hacked', 'otp', 'unauthorized', 'username', 'sign in'])) category = 'Account Issues';\n  else if (has(['error', 'bug', 'crash', 'not working', 'down', 'outage', 'slow', 'broken', 'fail', 'unavailable'])) category = 'Technical Issues';\n  else category = 'General Queries';\n}\n\nconst paymentFailure = category === 'Payment Issues' && has(['fail', 'declined', 'deducted', 'double', 'twice', 'stuck', 'not received']);\nconst security = has(['hacked', 'unauthorized', 'compromised', 'stolen', 'phishing', 'suspicious', 'breach', 'security']);\nconst outage = has(['outage', 'urgent', 'down for', 'service is down', 'site is down', 'cannot access anything']);\nlet priority = 'LOW';\nif (paymentFailure || security || outage) priority = 'HIGH';\nelse if (category !== 'General Queries') priority = 'MEDIUM';\n\nconst templates = {\n  'Payment Issues': 'We are sorry about the trouble with your payment. Our billing team is reviewing your transaction and will confirm the next steps, including any refund, shortly.',\n  'Technical Issues': 'Thank you for reporting this technical problem. Our engineers are investigating and we will update you as soon as we have a fix or workaround.',\n  'Account Issues': 'Thank you for contacting us about your account. For your safety, please do not share your password with anyone. Our account team is looking into this and will help you regain full access.',\n  'General Queries': 'Thank you for reaching out. We have received your query and a member of our team will get back to you with the information you need.',\n};\nconst sla = { HIGH: 'within 1 hour', MEDIUM: 'within 24 hours', LOW: 'within 2-3 business days' };\nconst response = 'Dear ' + name + ', ' + templates[category] + ' You can expect a follow-up ' + sla[priority] + '. Kind regards, Customer Support Team';\n\nconst ticket_id = 'TKT-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase();\n\nreturn [{ json: {\n  ticket_id,\n  customer_name: name,\n  customer_email: email,\n  issue_description: desc,\n  category,\n  priority,\n  status: 'Open',\n  generated_response: response,\n  created_date: new Date().toISOString(),\n} }];"
+      },
+      "id": "aa4fc2d3-6a4e-485f-970d-f9c43a0c2790",
+      "name": "Classify Ticket",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.priority }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "HIGH"
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "HIGH"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.priority }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "MEDIUM"
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "MEDIUM"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.priority }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "LOW"
+                  }
+                ]
+              },
+              "renameOutput": true,
+              "outputKey": "LOW"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ea319f98-fd3e-4872-a27a-e46c657ee5b8",
+      "name": "Route by Priority",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.5,
+      "position": [
+        720,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "notification_type",
+              "value": "URGENT - support team alerted immediately",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "1ddceb3f-93df-4b6c-9a91-05a1f50a0962",
+      "name": "Flag Urgent Support",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        944,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1U10jtNbF2HIeDXCYXeOguuZObxqiFB-30Y6eQUHsbVY",
+          "mode": "list",
+          "cachedResultName": "customer_support_tickets_sample",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1U10jtNbF2HIeDXCYXeOguuZObxqiFB-30Y6eQUHsbVY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": 93641171,
+          "cachedResultName": "customer_support_tickets_sample.csv",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1U10jtNbF2HIeDXCYXeOguuZObxqiFB-30Y6eQUHsbVY/edit#gid=93641171"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Ticket ID": "={{ $json.ticket_id }}",
+            "Customer Name": "={{ $json.customer_name }}",
+            "Customer Email": "={{ $json.customer_email }}",
+            "Issue Description": "={{ $json.issue_description }}",
+            "Issue Category": "={{ $json.category }}",
+            "Priority": "={{ $json.priority }}",
+            "Status": "={{ $json.status }}",
+            "Generated Response": "={{ $json.generated_response }}",
+            "Created Date": "={{ $json.created_date }}"
+          },
+          "schema": [
+            {
+              "id": "Ticket ID",
+              "displayName": "Ticket ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Customer Name",
+              "displayName": "Customer Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Customer Email",
+              "displayName": "Customer Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Issue Description",
+              "displayName": "Issue Description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Issue Category",
+              "displayName": "Issue Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Priority",
+              "displayName": "Priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Generated Response",
+              "displayName": "Generated Response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            },
+            {
+              "id": "Created Date",
+              "displayName": "Created Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "28cfb8b3-cf3e-4d33-853d-0e9311faa352",
+      "name": "Store Ticket in Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1168,
+        320
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "3Jv4azYArkwSEui8",
+          "name": "Google Sheets account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Classify Ticket').item.json.customer_email }}",
+        "subject": "={{ 'Ticket ' + $('Classify Ticket').item.json.ticket_id + ' received' }}",
+        "emailType": "text",
+        "message": "={{ $('Classify Ticket').item.json.generated_response + '\\n\\nYour ticket ID: ' + $('Classify Ticket').item.json.ticket_id }}",
+        "options": {}
+      },
+      "id": "b9729d45-2f75-426d-a68e-f449096ea9fd",
+      "name": "Email Customer Acknowledgement",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1024,
+        208
+      ],
+      "webhookId": "434901b1-8a89-4b38-924e-af32e9286136",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "FW9NRbvRrlzS5tyR",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Classify Ticket').item.json.priority }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "HIGH"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "72dd0c67-5dec-4059-b5f3-744afbe581db",
+      "name": "Is HIGH Priority?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1248,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "anamikaapinny12@gmail.com",
+        "subject": "={{ 'URGENT HIGH priority ticket ' + $('Classify Ticket').item.json.ticket_id }}",
+        "emailType": "text",
+        "message": "={{ 'Ticket: ' + $('Classify Ticket').item.json.ticket_id + '\\nCustomer: ' + $('Classify Ticket').item.json.customer_name + ' <' + $('Classify Ticket').item.json.customer_email + '>\\nCategory: ' + $('Classify Ticket').item.json.category + '\\nIssue: ' + $('Classify Ticket').item.json.issue_description }}",
+        "options": {}
+      },
+      "id": "fba26a93-2753-47d5-b49e-93e3fa31972f",
+      "name": "Email Support Team Alert",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1472,
+        128
+      ],
+      "webhookId": "e659caff-c45b-41c8-b896-5e52c3b06b47",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "FW9NRbvRrlzS5tyR",
+          "name": "Gmail account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, ticket_id: $('Classify Ticket').item.json.ticket_id, category: $('Classify Ticket').item.json.category, priority: $('Classify Ticket').item.json.priority, status: $('Classify Ticket').item.json.status, generated_response: $('Classify Ticket').item.json.generated_response }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "8bc22761-3c59-4baa-8692-763b06779088",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1696,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a2",
+              "name": "notification_type",
+              "value": "NORMAL - queued for support team",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "ce093595-eac1-4211-89ed-d6fed224b3d3",
+      "name": "Flag Normal Support",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        944,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a3",
+              "name": "notification_type",
+              "value": "STANDARD - acknowledgement only",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "c5614ea2-6045-4875-b1d6-686e73f2b6ac",
+      "name": "Flag Standard Acknowledgement",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        944,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: 'Validation failed: missing or invalid fields', details: [ !$json.body.customer_name ? 'customer_name is required' : null, !($json.body.customer_email || '').includes('@') ? 'customer_email is required and must be a valid email' : null, !$json.body.issue_description ? 'issue_description is required' : null ].filter(Boolean) }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "9819f84c-5576-4ed8-a34c-7ee041e27581",
+      "name": "Respond Validation Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        608,
+        192
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receive Support Request": {
+      "main": [
+        [
+          {
+            "node": "Is Request Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Request Valid?": {
+      "main": [
+        [
+          {
+            "node": "Classify Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Ticket": {
+      "main": [
+        [
+          {
+            "node": "Route by Priority",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Priority": {
+      "main": [
+        [
+          {
+            "node": "Flag Urgent Support",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flag Normal Support",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flag Standard Acknowledgement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag Urgent Support": {
+      "main": [
+        [
+          {
+            "node": "Store Ticket in Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Ticket in Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Email Customer Acknowledgement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Customer Acknowledgement": {
+      "main": [
+        [
+          {
+            "node": "Is HIGH Priority?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is HIGH Priority?": {
+      "main": [
+        [
+          {
+            "node": "Email Support Team Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Support Team Alert": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag Normal Support": {
+      "main": [
+        [
+          {
+            "node": "Store Ticket in Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag Standard Acknowledgement": {
+      "main": [
+        [
+          {
+            "node": "Store Ticket in Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "791d5b9e-06b3-415b-890f-82a611195ceb",
+  "meta": {
+    "instanceId": "cec96d8af25d8be4a9214547292c0851f99450124453134dcc11f3b956d2427d"
+  },
+  "nodeGroups": [
+    {
+      "id": "9d8f9ed9-9ec7-4ea4-bdf4-448f0506d86e",
+      "name": "Triage and log ticket",
+      "nodeIds": [
+        "aa4fc2d3-6a4e-485f-970d-f9c43a0c2790",
+        "ea319f98-fd3e-4872-a27a-e46c657ee5b8",
+        "1ddceb3f-93df-4b6c-9a91-05a1f50a0962",
+        "ce093595-eac1-4211-89ed-d6fed224b3d3",
+        "c5614ea2-6045-4875-b1d6-686e73f2b6ac",
+        "28cfb8b3-cf3e-4d33-853d-0e9311faa352"
+      ],
+      "description": "Builds ticket ID, category, priority and template reply, routes by urgency, then saves the ticket to Google Sheets"
+    },
+    {
+      "id": "edb6f5a3-b27d-4796-8a43-ba532f8c6732",
+      "name": "Notify and respond",
+      "nodeIds": [
+        "b9729d45-2f75-426d-a68e-f449096ea9fd",
+        "72dd0c67-5dec-4059-b5f3-744afbe581db",
+        "fba26a93-2753-47d5-b49e-93e3fa31972f",
+        "8bc22761-3c59-4baa-8692-763b06779088"
+      ],
+      "description": "Emails the customer, alerts support for HIGH tickets, then returns the JSON result to the caller"
+    }
+  ],
+  "id": "PIBnQewEZWvrE0eB",
+  "tags": []
+}
